@@ -1,0 +1,178 @@
+version: '3'
+services:
+  api:
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    env_file: ./docker.env
+    environment:
+      - SERVICE_TYPE=MAIN_BACKEND
+      - DB_CONNECTOR_HOST=http://db-connector
+      - DB_CONNECTOR_PORT=3002
+      - DB_SSH_CONNECTOR_HOST=http://db-ssh-connector
+      - DB_SSH_CONNECTOR_PORT=3002
+      - WORKFLOW_TEMPORAL_CLUSTER_FRONTEND_HOST=temporal
+      - WORKFLOW_TEMPORAL_CLUSTER_FRONTEND_PORT=7233
+      - WORKFLOW_BACKEND_HOST=http://api:3000
+      - CODE_EXECUTOR_INGRESS_DOMAIN=http://code-executor:3004
+    networks:
+      - frontend-network
+      - backend-network
+      - db-connector-network
+      - db-ssh-connector-network
+      - workflows-network
+      - code-executor-network
+    depends_on:
+      - postgres
+      - db-connector
+      - db-ssh-connector
+      - jobs-runner
+      - workflows-worker
+      - code-executor
+    command: bash -c "./docker_scripts/wait-for-it.sh postgres:5432; ./docker_scripts/start_api.sh"
+    links:
+      - postgres
+    ports:
+      - '3000:3000'
+    restart: on-failure
+
+  jobs-runner:
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    env_file: ./docker.env
+    environment:
+      - SERVICE_TYPE=JOBS_RUNNER
+    networks:
+      - backend-network
+    depends_on:
+      - postgres
+    command: bash -c "chmod -R +x ./docker_scripts; sync; ./docker_scripts/wait-for-it.sh postgres:5432; ./docker_scripts/start_api.sh"
+    links:
+      - postgres
+
+  db-connector:
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    env_file: ./docker.env
+    environment:
+      - SERVICE_TYPE=DB_CONNECTOR_SERVICE
+      - DBCONNECTOR_POSTGRES_POOL_MAX_SIZE=100
+      - DBCONNECTOR_QUERY_TIMEOUT_MS=120000
+    networks:
+      - db-connector-network
+    restart: on-failure
+
+  db-ssh-connector:
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    command: bash -c "./docker_scripts/generate_key_pair.sh; ./docker_scripts/start_api.sh"
+    env_file: ./docker.env
+    environment:
+      - SERVICE_TYPE=DB_SSH_CONNECTOR_SERVICE
+      - DBCONNECTOR_POSTGRES_POOL_MAX_SIZE=100
+      - DBCONNECTOR_QUERY_TIMEOUT_MS=120000
+    networks:
+      - db-ssh-connector-network
+    restart: on-failure
+
+  workflows-worker:
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    command: bash -c "./docker_scripts/wait-for-it.sh postgres:5432; ./docker_scripts/start_api.sh"
+    env_file: ./docker.env
+    depends_on:
+      - temporal
+    environment:
+      - SERVICE_TYPE=WORKFLOW_TEMPORAL_WORKER
+      - NODE_OPTIONS=--max_old_space_size=1024
+      - DISABLE_DATABASE_MIGRATIONS=true
+      - WORKFLOW_TEMPORAL_CLUSTER_FRONTEND_HOST=temporal
+      - WORKFLOW_TEMPORAL_CLUSTER_FRONTEND_PORT=7233
+      - WORKFLOW_BACKEND_HOST=http://api:3000
+      - CODE_EXECUTOR_INGRESS_DOMAIN=http://code-executor:3004
+    networks:
+      - backend-network
+      - db-connector-network
+      - workflows-network
+      - code-executor-network
+    restart: on-failure
+
+  code-executor:
+    build:
+      context: ./
+      dockerfile: CodeExecutor.Dockerfile
+    command: bash -c "./start.sh"
+    env_file: ./docker.env
+    environment:
+      - NODE_OPTIONS=--max_old_space_size=1024
+    networks:
+      - code-executor-network
+    privileged: true
+    restart: on-failure
+
+  postgres:
+    image: 'postgres:15.4'
+    env_file: docker.env
+    networks:
+      - backend-network
+      - db-connector-network
+      - temporal-network
+    volumes:
+      - data:/var/lib/postgresql/data
+    ports:
+      - '5432:5432'
+
+  temporal:
+    container_name: temporal
+    env_file: ./docker.env
+    environment:
+      - DB=postgresql
+      - DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development-sql.yaml
+    image: tryretool/one-offs:retool-temporal-1.1.2
+    networks:
+      - temporal-network
+      - workflows-network
+    ports:
+      - '127.0.0.1:7233:7233'
+    volumes:
+      - ./dynamicconfig:/etc/temporal/config/dynamicconfig
+
+  temporal-admin-tools:
+    container_name: temporal-admin-tools
+    depends_on:
+      - temporal
+    environment:
+      - TEMPORAL_CLI_ADDRESS=temporal:7233
+    image: temporalio/admin-tools:1.18.5
+    networks:
+      - temporal-network
+    stdin_open: true
+    tty: true
+  temporal-ui:
+    container_name: temporal-ui
+    depends_on:
+      - temporal
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+      - TEMPORAL_CORS_ORIGINS=http://localhost:3000
+    image: temporalio/ui:2.9.1
+    networks:
+      - temporal-network
+    ports:
+      - '8080:8080'
+
+networks:
+  frontend-network:
+  backend-network:
+  workflows-network:
+  db-connector-network:
+  db-ssh-connector-network:
+  temporal-network:
+  code-executor-network:
+
+volumes:
+  data:

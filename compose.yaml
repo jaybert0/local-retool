@@ -1,0 +1,92 @@
+version: '3'
+services:
+  api:
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    env_file: ./docker.env
+    environment:
+      - SERVICE_TYPE=MAIN_BACKEND
+      - DB_CONNECTOR_HOST=http://db-connector
+      - DB_CONNECTOR_PORT=3002
+      # - DB_SSH_CONNECTOR_HOST=http://db-ssh-connector
+      # - DB_SSH_CONNECTOR_PORT=3002
+    networks:
+      - frontend-network
+      - backend-network
+      - db-connector-network
+      # - db-ssh-connector-network
+    depends_on:
+      - postgres
+      - db-connector
+      # - db-ssh-connector
+      - jobs-runner
+    command: bash -c "./docker_scripts/wait-for-it.sh postgres:5432; ./docker_scripts/start_api.sh"
+    links:
+      - postgres
+    ports:
+      - '3000:3000'
+    restart: on-failure
+
+  jobs-runner:
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    env_file: ./docker.env
+    environment:
+      - SERVICE_TYPE=JOBS_RUNNER
+    networks:
+      - backend-network
+    depends_on:
+      - postgres
+    command: bash -c "chmod -R +x ./docker_scripts; sync; ./docker_scripts/wait-for-it.sh postgres:5432; ./docker_scripts/start_api.sh"
+    links:
+      - postgres
+
+  db-connector:
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    env_file: ./docker.env
+    environment:
+      - SERVICE_TYPE=DB_CONNECTOR_SERVICE
+      - DBCONNECTOR_POSTGRES_POOL_MAX_SIZE=100
+      - DBCONNECTOR_QUERY_TIMEOUT_MS=120000
+    networks:
+      - db-connector-network
+    restart: on-failure
+
+  # db-ssh-connector:
+  #   build:
+  #     context: ./
+  #     dockerfile: Dockerfile
+  #   command: bash -c "./docker_scripts/generate_key_pair.sh; ./docker_scripts/start_api.sh"
+  #   env_file: ./docker.env
+  #   environment:
+  #     - SERVICE_TYPE=DB_SSH_CONNECTOR_SERVICE
+  #     - DBCONNECTOR_POSTGRES_POOL_MAX_SIZE=100
+  #     - DBCONNECTOR_QUERY_TIMEOUT_MS=120000
+  #   networks:
+  #     - db-ssh-connector-network
+  #   restart: on-failure
+
+
+  postgres:
+    image: 'postgres:15.4'
+    env_file: docker.env
+    networks:
+      - backend-network
+      - db-connector-network
+    volumes:
+      - data:/var/lib/postgresql/data
+    ports:
+      - '5432:5432'
+
+networks:
+  frontend-network:
+  backend-network:
+  db-connector-network:
+  # db-ssh-connector-network:
+
+volumes:
+  data:
