@@ -195,9 +195,9 @@ If Confluence page creation fails: send a Slack DM to U03MH0RAUVD saying "Cloud 
 
 ## STEP 4 — SEND SLACK NOTIFICATIONS
 
-Using the Slack connector, send a single message to #support-alerts tagging both Jay Lee and Lauren M:
+Using the Slack connector, send a single message to #support-alerts tagging Jay Lee and the support-managers group:
 
-"<@U03MH0RAUVD> <@U05U8D1RL8H> [Month] [Year] Cloud Stability Report is ready: [Confluence page URL]"
+"<@U03MH0RAUVD> <!subteam^S046CKNV01E> [Month] [Year] Cloud Stability Report is ready: [Confluence page URL]"
 
 Send to:
 1. Slack channel ID C02B4ETL404 (#support-alerts) — channel post
@@ -206,6 +206,6 @@ Send to:
 
 ## ERROR HANDLING
 
-- If the Databricks query returns 0 rows: send a message to C02B4ETL404 (#support-alerts) tagging <@U03MH0RAUVD> and <@U05U8D1RL8H> saying "Monthly Cloud Stability Report could not be generated — Databricks query returned no results for [month/year]. Please check the data source."
-- If Confluence page creation fails: send a message to C02B4ETL404 (#support-alerts) tagging <@U03MH0RAUVD> and <@U05U8D1RL8H> saying "Cloud Stability Report was generated but failed to publish to Confluence. Error: [error message]"
+- If the Databricks query returns 0 rows: send a message to C02B4ETL404 (#support-alerts) tagging <@U03MH0RAUVD> and <!subteam^S046CKNV01E> saying "Monthly Cloud Stability Report could not be generated — Databricks query returned no results for [month/year]. Please check the data source."
+- If Confluence page creation fails: send a message to C02B4ETL404 (#support-alerts) tagging <@U03MH0RAUVD> and <!subteam^S046CKNV01E> saying "Cloud Stability Report was generated but failed to publish to Confluence. Error: [error message]"
 - Do not silently fail. Always send Slack notifications reporting success or failure.
